@@ -8,6 +8,10 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/gorilla/mux"
 )
 
 //Create user
@@ -20,6 +24,11 @@ func CreateUser(rw http.ResponseWriter, r *http.Request) {
 
 	var user model.User
 	if err = json.Unmarshal(body, &user); err != nil {
+		answers.Err(rw, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := user.Prepare(); err != nil {
 		answers.Err(rw, http.StatusBadRequest, err)
 		return
 	}
@@ -43,12 +52,51 @@ func CreateUser(rw http.ResponseWriter, r *http.Request) {
 
 //Find users
 func FindUsers(rw http.ResponseWriter, r *http.Request) {
-	rw.Write([]byte("FindUsers"))
+	nameOrNick := strings.ToLower(r.URL.Query().Get("user"))
+
+	db, err := database.Connect()
+	if err != nil {
+		answers.Err(rw, http.StatusInternalServerError, err)
+		return
+	}
+	defer db.Close()
+
+	repository := repository.NewUsersRepository(db)
+	users, err := repository.Find(nameOrNick)
+
+	if err != nil {
+		answers.Err(rw, http.StatusInternalServerError, err)
+		return
+	}
+	answers.JSON(rw, http.StatusOK, users)
+
 }
 
 //Find user by id
 func FindUser(rw http.ResponseWriter, r *http.Request) {
-	rw.Write([]byte("FindUser"))
+	parameters := mux.Vars(r)
+
+	userID, err := strconv.ParseUint(parameters["id"], 10, 64)
+	if err != nil {
+		answers.Err(rw, http.StatusBadRequest, err)
+		return
+	}
+
+	db, err := database.Connect()
+	if err != nil {
+		answers.Err(rw, http.StatusInternalServerError, err)
+		return
+	}
+	defer db.Close()
+
+	repository := repository.NewUsersRepository(db)
+	user, err := repository.FindById(userID)
+
+	if err != nil {
+		answers.Err(rw, http.StatusInternalServerError, err)
+		return
+	}
+	answers.JSON(rw, http.StatusOK, user)
 }
 
 //Update user
